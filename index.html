@@ -56,6 +56,7 @@
   #preview.hidden{display:none}
   .field{width:100%;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px;font-size:16px;margin:4px 0}
   .btn:disabled{opacity:.4;cursor:default}
+  .field:read-only,.field:disabled{opacity:.6;cursor:not-allowed}
   .rv{margin-top:8px}
   .rv .row{display:grid;grid-template-columns:118px 1fr 28px;grid-template-areas:"band band x" "time stage x";gap:4px;padding:6px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:#1a130e}
   .rv .row.fav{border-color:#6b5a1d}
@@ -112,10 +113,11 @@
         <button class="btn ghost" id="readOCR" disabled>Read on device (rougher)</button>
       </div>
       <details id="keybox">
-        <summary class="note">Claude settings</summary>
+        <summary class="note" id="keysum">Claude settings</summary>
         <p class="note">Needs an Anthropic API key (console.anthropic.com). It's stored only in this browser and sent only to api.anthropic.com.</p>
         <input type="password" id="apikey" class="field" placeholder="sk-ant-…" autocomplete="off">
         <input type="text" id="model" class="field" placeholder="Model" value="claude-sonnet-5-5">
+        <div id="keymsg" class="note"></div>
         <div class="bar"><button class="btn ghost" id="savekey">Save</button><button class="btn ghost" id="forgetkey">Forget key</button></div>
       </details>
       <div id="status" class="note"></div>
@@ -508,8 +510,35 @@ async function runReader(fn) {
 }
 $('#readClaude').onclick = () => runReader(readWithClaude);
 $('#readOCR').onclick = () => runReader(readWithOCR);
-$('#savekey').onclick = () => { const k = $('#apikey').value.trim(); if (k) localStorage.setItem(LS_KEY, k); localStorage.setItem(LS_MODEL, $('#model').value.trim() || 'claude-sonnet-5-5'); $('#apikey').value = ''; $('#keybox').open = false; toast(k ? 'Key saved' : 'Saved') };
-$('#forgetkey').onclick = () => { localStorage.removeItem(LS_KEY); toast('Key removed') };
+function syncKeyUI(msg) {
+  const key = localStorage.getItem(LS_KEY), has = !!key;
+  $('#apikey').readOnly = $('#model').readOnly = has;
+  $('#apikey').disabled = has;
+  $('#savekey').disabled = has;
+  $('#forgetkey').disabled = !has;
+  $('#apikey').value = '';
+  $('#apikey').placeholder = has ? `Key saved (…${key.slice(-4)})` : 'sk-ant-…';
+  $('#model').value = localStorage.getItem(LS_MODEL) || 'claude-sonnet-5-5';
+  $('#keysum').innerHTML = has ? 'Claude settings · <b style="color:var(--green)">✓ key saved</b>' : 'Claude settings · <b style="color:var(--yellow)">no key</b>';
+  $('#keymsg').innerHTML = msg || (has ? 'Locked. Tap Forget key to change the key or model.' : '');
+}
+$('#savekey').onclick = async () => {
+  const k = $('#apikey').value.trim(), model = $('#model').value.trim() || 'claude-sonnet-5-5';
+  if (!/^sk-ant-[\w-]{20,}$/.test(k)) { syncKeyUI('<span style="color:var(--red)">That doesn\'t look like an Anthropic API key (it should start with sk-ant-).</span>'); return }
+  $('#savekey').disabled = true; $('#keymsg').innerHTML = '<span class="spin"></span>Checking key…';
+  try {
+    const r = await fetch(`https://api.anthropic.com/v1/models/${encodeURIComponent(model)}`, { headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } });
+    if (r.status === 401 || r.status === 403) { $('#savekey').disabled = false; $('#keymsg').innerHTML = '<span style="color:var(--red)">Anthropic rejected that key.</span>'; return }
+    if (r.status === 404) { $('#savekey').disabled = false; $('#keymsg').innerHTML = `<span style="color:var(--red)">Key works, but model “${esc(model)}” wasn't found.</span>`; return }
+    localStorage.setItem(LS_KEY, k); localStorage.setItem(LS_MODEL, model);
+    syncKeyUI(r.ok ? 'Key verified and saved. Tap Forget key to change it.' : `Saved (couldn't fully verify: HTTP ${r.status}).`);
+  } catch {
+    localStorage.setItem(LS_KEY, k); localStorage.setItem(LS_MODEL, model);
+    syncKeyUI('Saved, but couldn\'t reach Anthropic to verify it (no signal?).');
+  }
+  toast('Key saved');
+};
+$('#forgetkey').onclick = () => { localStorage.removeItem(LS_KEY); syncKeyUI('Key removed. Enter a new key to use Claude.'); toast('Key removed') };
 $('#review').addEventListener('input', e => {
   const tr = e.target.closest('.row'), k = e.target.dataset.k; if (!tr || !k) return;
   const s = REVIEW.sets[+tr.dataset.i]; s[k] = e.target.value;
@@ -527,7 +556,7 @@ $('#review').addEventListener('click', e => {
     REVIEW = null; renderReview(); toast(`${PASTED[day].length} sets saved`); go('mine');
   }
 });
-$('#model').value = localStorage.getItem(LS_MODEL) || 'claude-sonnet-5-5';
+syncKeyUI();
 const _renderTimes = renderTimes;
 renderTimes = function () { $('#photoday').textContent = dayObj().label; _renderTimes() };
 </script>
