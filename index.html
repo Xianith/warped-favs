@@ -24,7 +24,7 @@
   input[type=search]{flex:1;min-width:160px;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:16px}
   .pill{font-size:13px;color:var(--dim)}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
-  .band{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;user-select:none;min-height:52px}
+  .band{-webkit-touch-callout:none;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;user-select:none;min-height:52px}
   .band .star{font-size:20px;color:#5a4636;transition:transform .1s}
   .band.fav{border-color:var(--yellow);background:#33270f}
   .band.fav .star{color:var(--yellow);transform:scale(1.15)}
@@ -68,12 +68,47 @@
   .rep .y{color:var(--yellow)}.rep .r{color:var(--red)}
   .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--dim);border-top-color:var(--yellow);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes sp{to{transform:rotate(360deg)}}
+  header{position:sticky}
+  .links{position:absolute;top:12px;right:12px;z-index:6}
+  .menubtn{display:none;border:0;border-radius:999px;padding:7px 12px;font-weight:800;font-size:13px;background:#0004;color:#fff;cursor:pointer}
+  .linkpanel{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:440px}
+  .linkpanel a{color:#fff;text-decoration:none;font-size:12px;font-weight:700;background:#0003;border-radius:999px;padding:4px 9px;white-space:nowrap}
+  .linkpanel a:hover{background:#0006}
+  @media (max-width:760px){
+    .menubtn{display:block}
+    .linkpanel{display:none;position:absolute;right:0;top:38px;flex-direction:column;flex-wrap:nowrap;align-items:stretch;background:#1c1510;border:1px solid var(--line);border-radius:12px;padding:6px;min-width:190px;box-shadow:0 8px 24px #000a}
+    .linkpanel.open{display:flex}
+    .linkpanel a{background:none;font-size:15px;padding:10px 12px;border-radius:8px}
+    .linkpanel a:active{background:#fff1}
+  }
+  @media (min-width:761px){ h1,.sub{max-width:calc(100% - 460px)} }
+  .band.noshow{opacity:.5;border-style:dashed}
+  .band.noshow .nm{text-decoration:line-through}
+  .band .ns{font-size:10px;font-weight:900;background:var(--red);color:#fff;border-radius:5px;padding:1px 5px;margin-left:4px;vertical-align:middle;text-decoration:none;display:inline-block}
+  .ctx{position:fixed;z-index:20;background:#1c1510;border:1px solid var(--line);border-radius:12px;padding:5px;min-width:200px;box-shadow:0 10px 30px #000c}
+  .ctx .hd{font-size:12px;color:var(--dim);padding:6px 10px 4px;font-weight:700}
+  .ctx button{white-space:nowrap;display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);font-size:15px;padding:10px;border-radius:8px;cursor:pointer}
+  .ctx button:hover,.ctx button:active{background:#fff1}
+  .hint{font-size:12px;color:var(--dim);margin:-4px 0 10px}
   .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--yellow);color:#2a1a00;font-weight:800;padding:10px 16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:1}
 </style>
 </head>
 <body>
 <header>
+  <div class="links" id="links">
+    <button class="menubtn" id="menubtn" aria-expanded="false" aria-controls="linkpanel" aria-label="Warped links">☰ Links</button>
+    <nav class="linkpanel" id="linkpanel" aria-label="Warped Tour links">
+      <a href="https://www.vanswarpedtour.com" target="_blank" rel="noopener">🌐 Official site</a>
+      <a href="https://www.instagram.com/vanswarpedtour" target="_blank" rel="noopener">📸 Instagram</a>
+      <a href="https://www.tiktok.com/@vanswarpedtour" target="_blank" rel="noopener">🎵 TikTok</a>
+      <a href="https://x.com/vanswarpedtour" target="_blank" rel="noopener">✖️ X</a>
+      <a href="https://www.facebook.com/warpedtour" target="_blank" rel="noopener">📘 Facebook</a>
+      <a href="https://www.reddit.com/r/warpedtour" target="_blank" rel="noopener">👽 r/warpedtour</a>
+      <a href="https://discord.gg/w9XhcbNJAb" target="_blank" rel="noopener">💬 Discord</a>
+      <a href="https://loudwire.com/watch-warped-tour-orlando-stream/" target="_blank" rel="noopener">📺 Livestream info</a>
+    </nav>
+  </div>
   <h1>Warped <span>Orlando</span> 2026</h1>
   <div class="sub">Camping World Stadium Campus · Nov 14–15</div>
   <div class="days" id="days"></div>
@@ -94,6 +129,7 @@
       <input type="search" id="q" placeholder="Search bands…">
       <span class="pill" id="favcount"></span>
     </div>
+    <div class="hint">Tap a band to star it. Right-click (or long-press on a phone) for more, like marking a No Show.</div>
     <div class="grid" id="grid"></div>
     <div class="bar" style="margin-top:16px">
       <button class="btn ghost" id="share">🔗 Copy share link</button>
@@ -142,8 +178,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const LS_FAV = 'warped26.favs', LS_TIMES = 'warped26.times', LS_DAY = 'warped26.day';
-let LINEUP, BASE = {sat:[],sun:[]}, PASTED = {sat:[],sun:[]}, FAVS = {sat:[],sun:[]};
+const LS_NOSHOW = 'warped26.noshow', LS_FAV = 'warped26.favs', LS_TIMES = 'warped26.times', LS_DAY = 'warped26.day';
+let NOSHOW = {sat:[],sun:[]}, LINEUP, BASE = {sat:[],sun:[]}, PASTED = {sat:[],sun:[]}, FAVS = {sat:[],sun:[]};
 let day = 'sat', tab = 'mine';
 
 const $ = s => document.querySelector(s);
@@ -205,13 +241,13 @@ function renderDays() {
   $('#days').innerHTML = LINEUP.days.map(d => `<button data-day="${d.id}" class="${d.id === day ? 'on' : ''}">${d.label}</button>`).join('');
 }
 function renderLineup() {
-  const q = norm($('#q').value || ''), t = new Map(times().map(e => [norm(e.band), e])), favs = new Set(FAVS[day]);
+  const q = norm($('#q').value || ''), t = new Map(times().map(e => [norm(e.band), e])), favs = new Set(FAVS[day]), ns = new Set(NOSHOW[day]);
   const list = dayObj().bands.filter(b => !q || norm(b).includes(q));
   $('#grid').innerHTML = list.map(b => {
     const e = t.get(norm(b));
-    return `<div class="band ${favs.has(b) ? 'fav' : ''}" data-band="${esc(b)}"><span class="star">★</span><div><div class="nm">${esc(b)}</div>${e ? `<div class="tm">${fmt(e.start)}${e.stage ? ' · ' + esc(e.stage) : ''}</div>` : ''}</div></div>`;
+    return `<div class="band ${favs.has(b) ? 'fav' : ''} ${ns.has(b) ? 'noshow' : ''}" data-band="${esc(b)}"><span class="star">★</span><div><div class="nm">${esc(b)}</div>${ns.has(b) ? '<span class="ns">NO SHOW</span>' : ''}${e ? `<div class="tm">${fmt(e.start)}${e.stage ? ' · ' + esc(e.stage) : ''}</div>` : ''}</div></div>`;
   }).join('') || '<div class="empty">No match</div>';
-  $('#favcount').textContent = `${FAVS[day].length} starred · ${dayObj().bands.length} bands`;
+  $('#favcount').textContent = `${FAVS[day].length} starred · ${NOSHOW[day].length ? NOSHOW[day].length + ' no-show · ' : ''}${dayObj().bands.length} bands`;
 }
 function renderMine() {
   const d = dayObj(), favs = FAVS[day];
@@ -219,15 +255,17 @@ function renderMine() {
     $('#tab-mine').innerHTML = `<div class="empty">No favorites starred for ${d.label} yet.<br><br><button class="btn" onclick="go('lineup')">Pick bands</button></div>`;
     return;
   }
-  const t = new Map(times().map(e => [norm(e.band), e]));
-  const timed = favs.map(b => t.get(norm(b))).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start) || toMin(a.end) - toMin(b.end));
-  const tba = favs.filter(b => !t.has(norm(b))).sort((a, b) => a.localeCompare(b));
+  const t = new Map(times().map(e => [norm(e.band), e])), ns = new Set(NOSHOW[day]);
+  const gone = favs.filter(b => ns.has(b)).sort((a, b) => a.localeCompare(b));
+  const live0 = favs.filter(b => !ns.has(b));
+  const timed = live0.map(b => t.get(norm(b))).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start) || toMin(a.end) - toMin(b.end));
+  const tba = live0.filter(b => !t.has(norm(b))).sort((a, b) => a.localeCompare(b));
   const clash = new Set();
   for (let i = 0; i < timed.length; i++) for (let j = i + 1; j < timed.length; j++)
     if (toMin(timed[j].start) < toMin(timed[i].end)) { clash.add(i); clash.add(j); }
   const now = new Date(), today = now.toISOString().slice(0, 10) === d.date || now.toLocaleDateString('en-CA') === d.date;
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  let html = `<p class="note">${d.label} · gates ${d.hours} · ${favs.length} favorites${clash.size ? ` · <b style="color:var(--red)">${clash.size} in conflicts</b>` : ''}</p>`;
+  let html = `<p class="note">${d.label} · gates ${d.hours} · ${live0.length} favorites${gone.length ? ` · ${gone.length} no-show` : ''}${clash.size ? ` · <b style="color:var(--red)">${clash.size} in conflicts</b>` : ''}</p>`;
   timed.forEach((e, i) => {
     if (i > 0) {
       const g = toMin(e.start) - toMin(timed[i - 1].end);
@@ -240,6 +278,7 @@ function renderMine() {
       <div class="s">${esc(e.stage || 'Stage TBA')}</div></div></div>`;
   });
   if (tba.length) html += `<h2>Times not posted yet</h2><div class="tba">${tba.map(esc).join(' · ')}</div>`;
+  if (gone.length) html += `<h2>Not making it 🚫</h2><div class="tba" style="text-decoration:line-through;color:var(--dim)">${gone.map(esc).join(' · ')}</div>`;
   if (!timed.length) html += `<p class="note" style="margin-top:12px">Set times are announced when gates open. Add them in the <a href="#" onclick="go('times');return false" style="color:var(--yellow)">Set Times</a> tab.</p>`;
   $('#tab-mine').innerHTML = html;
 }
@@ -256,13 +295,59 @@ function render() {
 }
 function go(t) { tab = t; render(); scrollTo(0, 0) }
 
+/* ---------- favorites / no-show / context menu ---------- */
+let longPressAt = 0;
+function toggleFav(b) { const f = FAVS[day], i = f.indexOf(b); i >= 0 ? f.splice(i, 1) : f.push(b); save(LS_FAV, FAVS); renderLineup() }
+function toggleNoShow(b) {
+  const n = NOSHOW[day], i = n.indexOf(b);
+  i >= 0 ? n.splice(i, 1) : n.push(b); save(LS_NOSHOW, NOSHOW); renderLineup();
+  toast(i >= 0 ? `${b} is back on` : `${b} marked No Show`);
+}
+function closeCtx() { document.querySelector('.ctx')?.remove() }
+function openCtx(b, x, y) {
+  closeCtx();
+  const fav = FAVS[day].includes(b), ns = NOSHOW[day].includes(b);
+  const m = document.createElement('div'); m.className = 'ctx'; m.setAttribute('role', 'menu');
+  m.innerHTML = `<div class="hd">${esc(b)}</div>
+    <button data-act="fav" role="menuitem">${fav ? '☆ Unfavorite' : '★ Favorite'}</button>
+    <button data-act="ns" role="menuitem">${ns ? '↩︎ Undo No Show' : '🚫 No Show (not playing)'}</button>`;
+  m.style.left = '0px'; m.style.top = '0px';
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(x, document.documentElement.clientWidth - r.width - 8)) + 'px';
+  m.style.top = Math.max(8, Math.min(y, document.documentElement.clientHeight - r.height - 8)) + 'px';
+  m.onclick = e => { const a = e.target.closest('[data-act]')?.dataset.act; if (!a) return; a === 'fav' ? toggleFav(b) : toggleNoShow(b); closeCtx() };
+  m.querySelector('button').focus({ preventScroll: true });
+}
+$('#grid').addEventListener('contextmenu', e => {
+  const bB = e.target.closest('.band'); if (!bB) return;
+  e.preventDefault(); openCtx(bB.dataset.band, e.clientX, e.clientY);
+});
+// long-press for iOS (no contextmenu event on touch)
+let lpTimer = null, lpStart = null;
+$('#grid').addEventListener('touchstart', e => {
+  const bB = e.target.closest('.band'); if (!bB) return;
+  const t = e.touches[0]; lpStart = [t.clientX, t.clientY];
+  lpTimer = setTimeout(() => { longPressAt = Date.now(); navigator.vibrate?.(15); openCtx(bB.dataset.band, lpStart[0], lpStart[1]) }, 500);
+}, { passive: true });
+$('#grid').addEventListener('touchmove', e => { const t = e.touches[0]; if (lpStart && Math.hypot(t.clientX - lpStart[0], t.clientY - lpStart[1]) > 10) clearTimeout(lpTimer) }, { passive: true });
+['touchend', 'touchcancel'].forEach(ev => $('#grid').addEventListener(ev, () => clearTimeout(lpTimer)));
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.ctx')) closeCtx(); if (!e.target.closest('#links')) setLinks(false) });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCtx(); setLinks(false) } });
+addEventListener('scroll', closeCtx, { passive: true });
+
+/* ---------- links menu (collapsible on phones) ---------- */
+function setLinks(open) { $('#linkpanel').classList.toggle('open', open); $('#menubtn').setAttribute('aria-expanded', open) }
+$('#menubtn').onclick = () => setLinks(!$('#linkpanel').classList.contains('open'));
+
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
   const dB = e.target.closest('[data-day]'); if (dB) { day = dB.dataset.day; save(LS_DAY, day); render(); return }
   const tB = e.target.closest('[data-tab]'); if (tB) { go(tB.dataset.tab); return }
+  if (e.target.closest('.ctx')) return;
   const bB = e.target.closest('.band'); if (bB) {
-    const b = bB.dataset.band, f = FAVS[day], i = f.indexOf(b);
-    i >= 0 ? f.splice(i, 1) : f.push(b); save(LS_FAV, FAVS); renderLineup();
+    if (Date.now() - longPressAt < 700) return;   // long-press just opened the menu
+    toggleFav(bB.dataset.band);
   }
 });
 $('#q').addEventListener('input', renderLineup);
@@ -286,6 +371,9 @@ $('#share').onclick = async () => {
 (async () => {
   LINEUP = await fetch('data/lineup.json').then(r => r.json());
   try { BASE = await fetch('data/schedule.json', { cache: 'no-store' }).then(r => r.json()) } catch {}
+  const nsStored = load(LS_NOSHOW, null);
+  if (nsStored) NOSHOW = Object.assign({ sat: [], sun: [] }, nsStored);
+  else { try { const j = await fetch('data/noshow.json', { cache: 'no-store' }).then(r => r.json()); NOSHOW = { sat: j.sat || [], sun: j.sun || [] } } catch {} }
   const stored = load(LS_FAV, null);
   if (stored) FAVS = Object.assign({ sat: [], sun: [] }, stored);
   else { try { FAVS = Object.assign({ sat: [], sun: [] }, await fetch('data/favorites.json', { cache: 'no-store' }).then(r => r.json())) } catch { FAVS = { sat: [], sun: [] } } }
@@ -373,7 +461,7 @@ function buildFromBoard(board, lineup) {
     });
   }
   const seen = new Set(out.map(e => normB(e.band)));
-  const missingFavs = FAVS[day].filter(b => !seen.has(normB(b)));
+  const missingFavs = FAVS[day].filter(b => !seen.has(normB(b)) && !NOSHOW[day].includes(b));
   if (missingFavs.length) rep.notes.push(`Favorites not found on the board: ${missingFavs.join(', ')}`);
   out.sort((a, b) => toMin(a.start) - toMin(b.start) || a.stage.localeCompare(b.stage));
   return { sets: out, rep };
