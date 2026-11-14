@@ -1,0 +1,15 @@
+{
+  "_note": "TEST FIXTURE ONLY — partial, approximate read of the 2025 Orlando board. Not 2026 data.",
+  "day": "sat",
+  "lineup": ["Escape the Fate", "Story of the Year", "Slaughter to Prevail", "Black Veil Brides",
+             "Yellowcard", "Falling in Reverse", "The Maine", "Mod Sun", "Plain White T's",
+             "3OH!3", "Pennywise", "MGK"],
+  "stages": [
+    {"name": "Vans Left Foot",
+     "sets": [["12:52", "Escape The Fate"], ["2:32", "Story of the Year"], ["3:52", "Slaughter to Prevail"],
+              ["5:29", "Black Veil Brides"], ["7:23", "Yellowcard"], ["9:46", "Falling in Reverse"]]},
+    {"name": "Vans Right Foot",
+     "sets": [["12:38", "The Maine"], ["1:30", "Mod Sun"], ["3:10", "Plain White Ts"],
+              ["4:36", "3OH!3"], ["6:22", "Pennywise"], ["8:28", "MGK"]]}
+  ]
+}

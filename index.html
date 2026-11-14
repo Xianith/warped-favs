@@ -197,7 +197,7 @@ function renderMine() {
     }
     const live = today && nowMin >= toMin(e.start) && nowMin < toMin(e.end), past = today && nowMin >= toMin(e.end);
     html += `<div class="slot ${clash.has(i) ? 'clash' : ''} ${live ? 'now' : ''} ${past ? 'past' : ''}">
-      <div class="t">${fmt(e.start)}<small>– ${fmt(e.end)}</small></div>
+      <div class="t">${fmt(e.start)}<small>– ${fmt(e.end)}${e.endEstimated ? ' est.' : ''}</small></div>
       <div><div class="b">${esc(e.band)}${live ? '<span class="tag y">NOW</span>' : ''}${clash.has(i) ? '<span class="tag r">CONFLICT</span>' : ''}</div>
       <div class="s">${esc(e.stage || 'Stage TBA')}</div></div></div>`;
   });
@@ -207,7 +207,7 @@ function renderMine() {
 }
 function renderTimes() {
   const t = times().sort((a, b) => toMin(a.start) - toMin(b.start));
-  $('#alltimes').innerHTML = t.length ? t.map(e => `<div class="slot"><div class="t">${fmt(e.start)}<small>– ${fmt(e.end)}</small></div><div><div class="b">${esc(e.band)}</div><div class="s">${esc(e.stage || '')}</div></div></div>`).join('')
+  $('#alltimes').innerHTML = t.length ? t.map(e => `<div class="slot"><div class="t">${fmt(e.start)}<small>– ${fmt(e.end)}${e.endEstimated ? ' est.' : ''}</small></div><div><div class="b">${esc(e.band)}</div><div class="s">${esc(e.stage || '')}</div></div></div>`).join('')
     : '<div class="empty">No set times loaded for this day yet.</div>';
 }
 function render() {
