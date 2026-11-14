@@ -51,6 +51,22 @@
   .empty{color:var(--dim);text-align:center;padding:30px 10px}
   code{background:#0005;padding:1px 5px;border-radius:5px}
   .hidden{display:none}
+  .photo{background:#1c1510;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:8px}
+  #preview{display:block;max-width:100%;max-height:260px;margin-top:10px;border-radius:10px}
+  #preview.hidden{display:none}
+  .field{width:100%;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px;font-size:16px;margin:4px 0}
+  .btn:disabled{opacity:.4;cursor:default}
+  .rv{margin-top:8px}
+  .rv .row{display:grid;grid-template-columns:118px 1fr 28px;grid-template-areas:"band band x" "time stage x";gap:4px;padding:6px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:#1a130e}
+  .rv .row.fav{border-color:#6b5a1d}
+  .rv input{width:100%;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 6px;font-size:15px}
+  .rv .row.warn input.bd{border-color:var(--yellow)} .rv .row.bad input.bd{border-color:var(--red)}
+  .rv .row.fav input.bd{font-weight:800}
+  .rv .x{background:none;border:0;color:var(--dim);font-size:18px;cursor:pointer}
+  .rep{margin-top:8px;font-size:13px}.rep div{margin:2px 0}
+  .rep .y{color:var(--yellow)}.rep .r{color:var(--red)}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--dim);border-top-color:var(--yellow);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
   .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--yellow);color:#2a1a00;font-weight:800;padding:10px 16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:1}
 </style>
@@ -86,7 +102,27 @@
 
   <!-- SET TIMES -->
   <section id="tab-times" class="hidden">
-    <p class="note">Set times drop when gates open. Paste them here (one set per line), or ask Claude to fill in <code>data/schedule.json</code>. Lines with only a stage name set the stage for the lines below it.</p>
+    <div class="photo">
+      <h2 style="margin-top:4px">📷 From a photo of the board</h2>
+      <p class="note">Take or pick a photo of the set-time board for <b id="photoday"></b>. You'll review everything before it's saved.</p>
+      <label class="btn" style="display:inline-block">Choose photo<input type="file" id="photo" accept="image/*" hidden></label>
+      <img id="preview" class="hidden" alt="Board photo preview">
+      <div class="bar" style="margin-top:10px">
+        <button class="btn" id="readClaude" disabled>Read with Claude</button>
+        <button class="btn ghost" id="readOCR" disabled>Read on device (rougher)</button>
+      </div>
+      <details id="keybox">
+        <summary class="note">Claude settings</summary>
+        <p class="note">Needs an Anthropic API key (console.anthropic.com). It's stored only in this browser and sent only to api.anthropic.com.</p>
+        <input type="password" id="apikey" class="field" placeholder="sk-ant-…" autocomplete="off">
+        <input type="text" id="model" class="field" placeholder="Model" value="claude-sonnet-5-5">
+        <div class="bar"><button class="btn ghost" id="savekey">Save</button><button class="btn ghost" id="forgetkey">Forget key</button></div>
+      </details>
+      <div id="status" class="note"></div>
+      <div id="review"></div>
+    </div>
+    <h2>Or paste as text</h2>
+    <p class="note">One set per line. Lines with only a stage name set the stage for the lines below it.</p>
     <p class="note">Examples that work:<br>
       <code>MAIN STAGE</code><br>
       <code>Simple Plan 7:15-8:00</code><br>
@@ -263,6 +299,237 @@ $('#share').onclick = async () => {
   render();
   setInterval(() => tab === 'mine' && renderMine(), 60000);
 })();
+</script>
+
+<script>
+/* ===================== Board photo importer =====================
+   Same rules as tools/import_board.py:
+   - bare 11 = AM, 12 = noon, 1–10 = PM; a time earlier than the previous set on a stage gets +12h
+   - est. end = min(start+40, next start on stage − 5), ≥15 min; last set on a stage = 60 min
+   - fuzzy match to the day's lineup: ≥.92 exact, .72–.92 flagged, below = unmatched (kept as written) */
+const LS_KEY = 'warped26.apikey', LS_MODEL = 'warped26.model';
+const DEFAULT_SET = 40, LAST_SET = 60, CHANGEOVER = 5, MIN_SET = 15;
+let REVIEW = null, IMG = null;
+
+const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const normB = s => norm(String(s).replace(/^\s*the\s+/i, ''));
+
+function lev(a, b) {
+  const d = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const t = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = t;
+    }
+  }
+  return d[b.length];
+}
+function bestMatch(name, lineup) {
+  const n = normB(name); let best = [0, null];
+  for (const b of lineup) {
+    const bn = normB(b);
+    if (n === bn) return [b, 1];
+    let r = n && bn ? 1 - lev(n, bn) / Math.max(n.length, bn.length) : 0;
+    if (n.length >= 3 && (bn.includes(n) || n.includes(bn))) r = Math.max(r, .85);
+    if (r > best[0]) best = [r, b];
+  }
+  return [best[1], best[0]];
+}
+function parseBoardTime(raw, prev) {
+  const s = String(raw).trim().toLowerCase().replace(/\./g, ':').replace(/\s/g, '');
+  const m = s.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+  if (!m) throw new Error(`unreadable time "${raw}"`);
+  let h = +m[1]; const mi = +(m[2] || 0), ap = m[3];
+  if (ap) { if (ap[0] === 'p' && h < 12) h += 12; if (ap[0] === 'a' && h === 12) h = 0; }
+  else if (h <= 10) h += 12;
+  let t = h * 60 + mi;
+  if (prev != null && t < prev && t + 720 > prev && t + 720 < 1440) t += 720;
+  return t;
+}
+function buildFromBoard(board, lineup) {
+  const out = [], rep = { fuzzy: [], unmatched: [], notes: [] };
+  for (const st of board.stages || []) {
+    const rows = []; let prev = null;
+    for (const [rawT, rawB] of st.sets || []) {
+      if (!rawB || !String(rawB).trim()) continue;
+      let t;
+      try { t = parseBoardTime(rawT, prev) } catch (e) { rep.notes.push(`${st.name}: ${e.message} (${rawB})`); continue }
+      if (prev != null && t <= prev) rep.notes.push(`${st.name}: ${rawB} at ${rawT} isn't after the set before it — check the photo`);
+      prev = t;
+      let [band, score] = bestMatch(rawB, lineup), flag = '';
+      if (score >= .92) flag = '';
+      else if (score >= .72) { flag = 'warn'; rep.fuzzy.push(`“${rawB}” → ${band}`) }
+      else { flag = 'bad'; rep.unmatched.push(`“${rawB}” (${st.name} ${rawT})`); band = String(rawB).trim() }
+      rows.push({ band, stage: st.name, s: t, flag, raw: rawB });
+    }
+    rows.forEach((r, i) => {
+      const nxt = rows[i + 1]?.s;
+      const len = nxt == null ? LAST_SET : Math.min(DEFAULT_SET, Math.max(MIN_SET, nxt - r.s - CHANGEOVER));
+      out.push({ band: r.band, stage: r.stage, start: hhmm(r.s), end: hhmm(Math.min(r.s + len, 1439)), endEstimated: true, flag: r.flag });
+    });
+  }
+  const seen = new Set(out.map(e => normB(e.band)));
+  const missingFavs = FAVS[day].filter(b => !seen.has(normB(b)));
+  if (missingFavs.length) rep.notes.push(`Favorites not found on the board: ${missingFavs.join(', ')}`);
+  out.sort((a, b) => toMin(a.start) - toMin(b.start) || a.stage.localeCompare(b.stage));
+  return { sets: out, rep };
+}
+
+/* ---------- image prep ---------- */
+function loadImage(file) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) });
+}
+function crop(img, x, w, maxEdge) {
+  const W = img.naturalWidth, H = img.naturalHeight, sw = Math.round(W * w), sx = Math.round(W * x);
+  const k = Math.min(1, maxEdge / Math.max(sw, H));
+  const c = document.createElement('canvas'); c.width = Math.round(sw * k); c.height = Math.round(H * k);
+  c.getContext('2d').drawImage(img, sx, 0, sw, H, 0, 0, c.width, c.height);
+  return c;
+}
+const b64 = c => c.toDataURL('image/jpeg', .9).split(',')[1];
+
+/* ---------- Claude reader ---------- */
+async function readWithClaude() {
+  const key = localStorage.getItem(LS_KEY);
+  if (!key) { $('#keybox').open = true; $('#apikey').focus(); status('Add your API key first, then tap Read with Claude again.'); return }
+  const model = localStorage.getItem(LS_MODEL) || 'claude-sonnet-5-5';
+  const wide = IMG.naturalWidth > IMG.naturalHeight * 1.15;
+  const tiles = wide ? [crop(IMG, 0, .56, 1568), crop(IMG, .44, .56, 1568)] : [crop(IMG, 0, 1, 1568)];
+  const d = dayObj();
+  const prompt = `This is a photo of the Vans Warped Tour Orlando set-time board for ${d.label}, 2026${wide ? '. It is sent as two overlapping halves (left, then right) of ONE board; report each stage only once' : ''}.
+The board has one TIME | BAND column pair per stage, with stage names across the top. It shows start times only.
+Some time cells show only minutes under an hour marker (e.g. an "12:" row then "38") — write every time out in full as H:MM.
+Copy band names as written; this is the lineup for the day, use it to resolve hard-to-read handwriting:
+${d.bands.join('; ')}
+Return ONLY JSON, no prose:
+{"stages":[{"name":"<stage name>","sets":[["H:MM","<band>"], ...]}], "unsure":["<cells you could not read confidently>"]}
+Keep stages in left-to-right order and sets top-to-bottom. Skip empty cells.`;
+  status('<span class="spin"></span>Claude is reading the board…', true);
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model, max_tokens: 6000, messages: [{ role: 'user', content: [
+      ...tiles.map(c => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64(c) } })),
+      { type: 'text', text: prompt }] }] })
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || `API error ${r.status}`);
+  const text = j.content.filter(c => c.type === 'text').map(c => c.text).join('');
+  const board = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  return { board, unsure: board.unsure || [] };
+}
+
+/* ---------- on-device OCR reader (Tesseract) ---------- */
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; s.onload = res; s.onerror = () => rej(new Error('Could not load the OCR library (no signal?)')); document.head.appendChild(s) });
+}
+async function readWithOCR() {
+  status('<span class="spin"></span>Loading on-device reader…', true);
+  await loadTesseract();
+  const c = crop(IMG, 0, 1, 2400);
+  const { data } = await Tesseract.recognize(c, 'eng', { logger: m => m.status === 'recognizing text' && status(`<span class="spin"></span>Reading… ${Math.round(m.progress * 100)}%`, true) });
+  const W = c.width, timeRe = /^(\d{1,2})[:.;](\d{2})$/, hits = [];
+  for (const line of data.lines || []) {
+    const ws = [...line.words].sort((a, b) => a.bbox.x0 - b.bbox.x0);
+    for (let i = 0; i < ws.length; i++) {
+      const t = ws[i].text.replace(/[^\d:.;]/g, '');
+      if (!timeRe.test(t)) continue;
+      const parts = [];
+      for (let k = i + 1; k < ws.length && !timeRe.test(ws[k].text.replace(/[^\d:.;]/g, '')) && ws[k].bbox.x0 - ws[k - 1].bbox.x1 < W * .05; k++) parts.push(ws[k].text);
+      const txt = parts.join(' ').replace(/[^A-Za-z0-9!&'.\- ]/g, '').trim();
+      if (txt.length >= 2) hits.push({ x: ws[i].bbox.x0, y: ws[i].bbox.y0, time: t.replace(/[.;]/, ':'), band: txt });
+    }
+  }
+  if (!hits.length) throw new Error("The on-device reader couldn't find any times. Try Read with Claude, or paste as text.");
+  hits.sort((a, b) => a.x - b.x);
+  const cols = []; for (const h of hits) { const c0 = cols.at(-1); if (c0 && h.x - c0.at(-1).x < W * .05) c0.push(h); else cols.push([h]) }
+  const board = { stages: cols.map((c, i) => ({ name: `Stage ${i + 1}`, sets: c.sort((a, b) => a.y - b.y).map(h => [h.time, h.band]) })) };
+  return { board, unsure: ['On-device reading is rough on handwriting. Check every row, and rename the stages.'] };
+}
+
+/* ---------- review UI ---------- */
+function status(html, raw) { $('#status').innerHTML = raw ? html : esc(html) }
+function renderReview(unsure = []) {
+  if (!REVIEW) { $('#review').innerHTML = ''; return }
+  const { sets, rep } = REVIEW, favs = new Set(FAVS[day].map(normB));
+  const list = [...rep.unmatched.map(s => `<div class="r">✗ Not in lineup, kept as written: ${esc(s)}</div>`),
+    ...rep.fuzzy.map(s => `<div class="y">≈ Matched loosely: ${esc(s)}</div>`),
+    ...rep.notes.map(s => `<div class="y">! ${esc(s)}</div>`),
+    ...unsure.map(s => `<div class="y">? ${esc(s)}</div>`)];
+  $('#review').innerHTML = `
+    <div class="rep"><b>${sets.length} sets found</b> · ${sets.filter(s => favs.has(normB(s.band))).length} of your favorites. Fix anything below, then save. End times are estimates.${list.join('')}</div>
+    <datalist id="dl-bands">${dayObj().bands.map(b => `<option value="${esc(b)}">`).join('')}</datalist>
+    <div class="rv">${sets.map((s, i) => `
+      <div class="row ${s.flag || ''} ${favs.has(normB(s.band)) ? 'fav' : ''}" data-i="${i}">
+        <input class="bd" style="grid-area:band" data-k="band" list="dl-bands" value="${esc(s.band)}" aria-label="Band">
+        <input style="grid-area:time" type="time" data-k="start" value="${s.start}" aria-label="Start">
+        <input style="grid-area:stage" data-k="stage" value="${esc(s.stage)}" aria-label="Stage">
+        <button class="x" style="grid-area:x" data-del="${i}" aria-label="Remove">×</button>
+      </div>`).join('')}</div>
+    <div class="bar" style="margin-top:10px">
+      <button class="btn" id="saveReview">Save to my schedule</button>
+      <button class="btn ghost" id="dlReview">Download JSON</button>
+      <button class="btn ghost" id="cancelReview">Discard</button>
+    </div>`;
+}
+function reviewToSets() {
+  // re-estimate ends from the edited starts, per stage
+  const byStage = {};
+  for (const s of REVIEW.sets) if (s.band.trim() && s.start) (byStage[s.stage] ||= []).push(s);
+  const out = [];
+  for (const rows of Object.values(byStage)) {
+    rows.sort((a, b) => toMin(a.start) - toMin(b.start));
+    rows.forEach((r, i) => {
+      const st = toMin(r.start), nxt = rows[i + 1] && toMin(rows[i + 1].start);
+      const len = nxt == null ? LAST_SET : Math.min(DEFAULT_SET, Math.max(MIN_SET, nxt - st - CHANGEOVER));
+      out.push({ band: r.band.trim(), stage: r.stage.trim(), start: r.start, end: hhmm(Math.min(st + len, 1439)), endEstimated: true });
+    });
+  }
+  return out.sort((a, b) => toMin(a.start) - toMin(b.start));
+}
+
+$('#photo').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  IMG = await loadImage(f); $('#preview').src = IMG.src; $('#preview').classList.remove('hidden');
+  $('#readClaude').disabled = $('#readOCR').disabled = false; REVIEW = null; renderReview();
+  status(localStorage.getItem(LS_KEY) ? 'Ready. Read with Claude for best results.' : 'Ready. Add an API key under Claude settings for best results, or try the on-device reader.');
+};
+async function runReader(fn) {
+  $('#readClaude').disabled = $('#readOCR').disabled = true;
+  try {
+    const res = await fn(); if (!res) return;
+    REVIEW = buildFromBoard(res.board, dayObj().bands);
+    status(''); renderReview(res.unsure);
+  } catch (err) { status('Couldn\'t read it: ' + (err.message || err)) }
+  finally { $('#readClaude').disabled = $('#readOCR').disabled = !IMG }
+}
+$('#readClaude').onclick = () => runReader(readWithClaude);
+$('#readOCR').onclick = () => runReader(readWithOCR);
+$('#savekey').onclick = () => { const k = $('#apikey').value.trim(); if (k) localStorage.setItem(LS_KEY, k); localStorage.setItem(LS_MODEL, $('#model').value.trim() || 'claude-sonnet-5-5'); $('#apikey').value = ''; $('#keybox').open = false; toast(k ? 'Key saved' : 'Saved') };
+$('#forgetkey').onclick = () => { localStorage.removeItem(LS_KEY); toast('Key removed') };
+$('#review').addEventListener('input', e => {
+  const tr = e.target.closest('.row'), k = e.target.dataset.k; if (!tr || !k) return;
+  const s = REVIEW.sets[+tr.dataset.i]; s[k] = e.target.value;
+  if (k === 'band') { const [b, sc] = bestMatch(s.band, dayObj().bands); s.flag = sc >= .92 ? '' : sc >= .72 ? 'warn' : 'bad'; tr.className = 'row ' + s.flag + (FAVS[day].some(f => normB(f) === normB(s.band)) ? ' fav' : '') }
+});
+$('#review').addEventListener('click', e => {
+  if (e.target.dataset.del != null) { REVIEW.sets.splice(+e.target.dataset.del, 1); renderReview(); return }
+  if (e.target.id === 'cancelReview') { REVIEW = null; renderReview(); return }
+  if (e.target.id === 'dlReview') {
+    const blob = new Blob([JSON.stringify({ [day]: reviewToSets() }, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `schedule-${day}.json` }); a.click(); return;
+  }
+  if (e.target.id === 'saveReview') {
+    PASTED[day] = reviewToSets(); save(LS_TIMES, PASTED);
+    REVIEW = null; renderReview(); toast(`${PASTED[day].length} sets saved`); go('mine');
+  }
+});
+$('#model').value = localStorage.getItem(LS_MODEL) || 'claude-sonnet-5-5';
+const _renderTimes = renderTimes;
+renderTimes = function () { $('#photoday').textContent = dayObj().label; _renderTimes() };
 </script>
 </body>
 </html>
