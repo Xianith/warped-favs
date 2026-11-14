@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Warped Orlando 2026 — My Schedule</title>
+<meta name="theme-color" content="#e8551c">
+<style>
+  :root{
+    --bg:#16110d; --card:#221a14; --line:#3a2c21; --ink:#f6ece2; --dim:#b39f8c;
+    --orange:#ff6a1f; --yellow:#ffd23f; --green:#5fbf4a; --blue:#3fa9f5; --red:#ff4d4d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+  header{background:linear-gradient(135deg,#e8551c,#c53d10);padding:18px 16px 12px;position:sticky;top:0;z-index:5;box-shadow:0 2px 10px #0008}
+  h1{margin:0;font-size:22px;letter-spacing:.5px;font-weight:900;text-transform:uppercase}
+  h1 span{color:var(--yellow)}
+  .sub{color:#ffe3cf;font-size:13px;margin-top:2px}
+  nav.tabs,.days{display:flex;gap:6px;margin-top:10px;overflow-x:auto}
+  nav.tabs button,.days button{flex:1;white-space:nowrap;border:0;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;background:#0003;color:#fff;cursor:pointer}
+  nav.tabs button.on,.days button.on{background:var(--yellow);color:#2a1a00}
+  main{max-width:820px;margin:0 auto;padding:14px 12px 40px}
+  .bar{display:flex;gap:8px;align-items:center;margin:4px 0 12px;flex-wrap:wrap}
+  input[type=search]{flex:1;min-width:160px;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:16px}
+  .pill{font-size:13px;color:var(--dim)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+  .band{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;user-select:none;min-height:52px}
+  .band .star{font-size:20px;color:#5a4636;transition:transform .1s}
+  .band.fav{border-color:var(--yellow);background:#33270f}
+  .band.fav .star{color:var(--yellow);transform:scale(1.15)}
+  .band .nm{font-weight:650;font-size:14px}
+  .band .tm{font-size:12px;color:var(--dim)}
+  .slot{display:grid;grid-template-columns:92px 1fr;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--green);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+  .slot.clash{border-left-color:var(--red)}
+  .slot.now{box-shadow:0 0 0 2px var(--yellow) inset}
+  .slot.past{opacity:.45}
+  .slot .t{font-weight:800;font-variant-numeric:tabular-nums}
+  .slot .t small{display:block;font-weight:500;color:var(--dim)}
+  .slot .b{font-weight:800;font-size:17px}
+  .slot .s{color:var(--dim);font-size:13px}
+  .tag{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle}
+  .tag.r{background:var(--red);color:#fff}.tag.y{background:var(--yellow);color:#2a1a00}
+  .gap{color:var(--dim);font-size:12px;text-align:center;margin:-2px 0 8px}
+  .tba{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:10px 12px}
+  .tba b{display:block;margin-bottom:4px}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:1px;color:var(--orange);margin:20px 0 8px}
+  textarea{width:100%;min-height:220px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px;font:14px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  .btn{border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;background:var(--orange);color:#fff;font-size:14px}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .note{color:var(--dim);font-size:13px}
+  .empty{color:var(--dim);text-align:center;padding:30px 10px}
+  code{background:#0005;padding:1px 5px;border-radius:5px}
+  .hidden{display:none}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--yellow);color:#2a1a00;font-weight:800;padding:10px 16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>Warped <span>Orlando</span> 2026</h1>
+  <div class="sub">Camping World Stadium Campus · Nov 14–15</div>
+  <div class="days" id="days"></div>
+  <nav class="tabs">
+    <button data-tab="mine" class="on">⭐ My Schedule</button>
+    <button data-tab="lineup">🎸 Lineup</button>
+    <button data-tab="times">🕒 Set Times</button>
+  </nav>
+</header>
+
+<main>
+  <!-- MY SCHEDULE -->
+  <section id="tab-mine"></section>
+
+  <!-- LINEUP -->
+  <section id="tab-lineup" class="hidden">
+    <div class="bar">
+      <input type="search" id="q" placeholder="Search bands…">
+      <span class="pill" id="favcount"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="bar" style="margin-top:16px">
+      <button class="btn ghost" id="share">🔗 Copy share link</button>
+      <button class="btn ghost" id="clearfav">Clear this day's stars</button>
+    </div>
+  </section>
+
+  <!-- SET TIMES -->
+  <section id="tab-times" class="hidden">
+    <p class="note">Set times drop when gates open. Paste them here (one set per line), or ask Claude to fill in <code>data/schedule.json</code>. Lines with only a stage name set the stage for the lines below it.</p>
+    <p class="note">Examples that work:<br>
+      <code>MAIN STAGE</code><br>
+      <code>Simple Plan 7:15-8:00</code><br>
+      <code>3:30 PM - 4:00 PM  Hawthorne Heights  (Blue Stage)</code></p>
+    <textarea id="paste" placeholder="Paste set times for the selected day…"></textarea>
+    <div class="bar" style="margin-top:10px">
+      <button class="btn" id="parse">Add to schedule</button>
+      <button class="btn ghost" id="wipe">Clear pasted times for this day</button>
+    </div>
+    <div id="parsed"></div>
+    <h2>Loaded set times</h2>
+    <div id="alltimes"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const LS_FAV = 'warped26.favs', LS_TIMES = 'warped26.times', LS_DAY = 'warped26.day';
+let LINEUP, BASE = {sat:[],sun:[]}, PASTED = {sat:[],sun:[]}, FAVS = {sat:[],sun:[]};
+let day = 'sat', tab = 'mine';
+
+const $ = s => document.querySelector(s);
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/&/g,'and').replace(/[^a-z0-9]/g,'');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} };
+const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1600) };
+
+const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m };
+const fmt = hhmm => { let [h, m] = hhmm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${String(m).padStart(2,'0')} ${ap}` };
+const dayObj = () => LINEUP.days.find(d => d.id === day);
+
+function times(d = day) {
+  // pasted entries override base entries for the same band
+  const map = new Map();
+  for (const e of [...(BASE[d] || []), ...(PASTED[d] || [])]) map.set(norm(e.band), e);
+  return [...map.values()];
+}
+
+/* ---------- parsing pasted set times ---------- */
+function to24(h, m, ap) {
+  h = +h; m = +(m || 0);
+  if (ap) { ap = ap.toLowerCase(); if (ap.startsWith('p') && h < 12) h += 12; if (ap.startsWith('a') && h === 12) h = 0; }
+  else if (h <= 10) h += 12;          // festival runs ~11am–11pm: bare 1–10 means PM
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function parseLines(text) {
+  const bands = dayObj().bands.map(b => ({ b, n: norm(b) })).sort((x, y) => y.n.length - x.n.length);
+  const timeRe = /(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m?\.?)?/i;
+  const rangeRe = /(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m?\.?)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m?\.?)?/i;
+  let stage = '', out = [], miss = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    const ln = norm(line);
+    const hit = bands.find(x => x.n && ln.includes(x.n));
+    const r = line.match(rangeRe);
+    const single = !r && /\d{1,2}:\d{2}/.test(line) ? line.match(timeRe) : null;
+    if (!hit && !r && !single) { stage = line.replace(/[:\-–—]+$/, '').trim(); continue; }
+    if (!hit) { miss.push(line); continue; }
+    let start, end;
+    if (r) {
+      const ap2 = r[6] || r[3];
+      start = to24(r[1], r[2], r[3] || (r[6] && +r[1] <= +r[4] ? r[6] : null));
+      end = to24(r[4], r[5], ap2);
+      if (toMin(end) <= toMin(start) && +end.slice(0, 2) < 12) end = `${+end.slice(0, 2) + 12}:${end.slice(3)}`;
+    } else if (single) {
+      start = to24(single[1], single[2], single[3]);
+      end = `${String(Math.min(23, +start.slice(0,2) + (+start.slice(3) + 30 >= 60 ? 1 : 0))).padStart(2,'0')}:${String((+start.slice(3) + 30) % 60).padStart(2,'0')}`;
+    } else { miss.push(line); continue; }
+    const inline = line.match(/\(([^)]+)\)|\[([^\]]+)\]|@\s*(.+)$/);
+    out.push({ band: hit.b, stage: inline ? (inline[1] || inline[2] || inline[3]).trim() : stage, start, end });
+  }
+  return { out, miss };
+}
+
+/* ---------- rendering ---------- */
+function renderDays() {
+  $('#days').innerHTML = LINEUP.days.map(d => `<button data-day="${d.id}" class="${d.id === day ? 'on' : ''}">${d.label}</button>`).join('');
+}
+function renderLineup() {
+  const q = norm($('#q').value || ''), t = new Map(times().map(e => [norm(e.band), e])), favs = new Set(FAVS[day]);
+  const list = dayObj().bands.filter(b => !q || norm(b).includes(q));
+  $('#grid').innerHTML = list.map(b => {
+    const e = t.get(norm(b));
+    return `<div class="band ${favs.has(b) ? 'fav' : ''}" data-band="${esc(b)}"><span class="star">★</span><div><div class="nm">${esc(b)}</div>${e ? `<div class="tm">${fmt(e.start)}${e.stage ? ' · ' + esc(e.stage) : ''}</div>` : ''}</div></div>`;
+  }).join('') || '<div class="empty">No match</div>';
+  $('#favcount').textContent = `${FAVS[day].length} starred · ${dayObj().bands.length} bands`;
+}
+function renderMine() {
+  const d = dayObj(), favs = FAVS[day];
+  if (!favs.length) {
+    $('#tab-mine').innerHTML = `<div class="empty">No favorites starred for ${d.label} yet.<br><br><button class="btn" onclick="go('lineup')">Pick bands</button></div>`;
+    return;
+  }
+  const t = new Map(times().map(e => [norm(e.band), e]));
+  const timed = favs.map(b => t.get(norm(b))).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start) || toMin(a.end) - toMin(b.end));
+  const tba = favs.filter(b => !t.has(norm(b))).sort((a, b) => a.localeCompare(b));
+  const clash = new Set();
+  for (let i = 0; i < timed.length; i++) for (let j = i + 1; j < timed.length; j++)
+    if (toMin(timed[j].start) < toMin(timed[i].end)) { clash.add(i); clash.add(j); }
+  const now = new Date(), today = now.toISOString().slice(0, 10) === d.date || now.toLocaleDateString('en-CA') === d.date;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  let html = `<p class="note">${d.label} · gates ${d.hours} · ${favs.length} favorites${clash.size ? ` · <b style="color:var(--red)">${clash.size} in conflicts</b>` : ''}</p>`;
+  timed.forEach((e, i) => {
+    if (i > 0) {
+      const g = toMin(e.start) - toMin(timed[i - 1].end);
+      if (g >= 20) html += `<div class="gap">— ${Math.floor(g / 60) ? Math.floor(g / 60) + 'h ' : ''}${g % 60}m free —</div>`;
+    }
+    const live = today && nowMin >= toMin(e.start) && nowMin < toMin(e.end), past = today && nowMin >= toMin(e.end);
+    html += `<div class="slot ${clash.has(i) ? 'clash' : ''} ${live ? 'now' : ''} ${past ? 'past' : ''}">
+      <div class="t">${fmt(e.start)}<small>– ${fmt(e.end)}</small></div>
+      <div><div class="b">${esc(e.band)}${live ? '<span class="tag y">NOW</span>' : ''}${clash.has(i) ? '<span class="tag r">CONFLICT</span>' : ''}</div>
+      <div class="s">${esc(e.stage || 'Stage TBA')}</div></div></div>`;
+  });
+  if (tba.length) html += `<h2>Times not posted yet</h2><div class="tba">${tba.map(esc).join(' · ')}</div>`;
+  if (!timed.length) html += `<p class="note" style="margin-top:12px">Set times are announced when gates open. Add them in the <a href="#" onclick="go('times');return false" style="color:var(--yellow)">Set Times</a> tab.</p>`;
+  $('#tab-mine').innerHTML = html;
+}
+function renderTimes() {
+  const t = times().sort((a, b) => toMin(a.start) - toMin(b.start));
+  $('#alltimes').innerHTML = t.length ? t.map(e => `<div class="slot"><div class="t">${fmt(e.start)}<small>– ${fmt(e.end)}</small></div><div><div class="b">${esc(e.band)}</div><div class="s">${esc(e.stage || '')}</div></div></div>`).join('')
+    : '<div class="empty">No set times loaded for this day yet.</div>';
+}
+function render() {
+  renderDays();
+  for (const s of ['mine', 'lineup', 'times']) $('#tab-' + s).classList.toggle('hidden', s !== tab);
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  ({ mine: renderMine, lineup: renderLineup, times: renderTimes })[tab]();
+}
+function go(t) { tab = t; render(); scrollTo(0, 0) }
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const dB = e.target.closest('[data-day]'); if (dB) { day = dB.dataset.day; save(LS_DAY, day); render(); return }
+  const tB = e.target.closest('[data-tab]'); if (tB) { go(tB.dataset.tab); return }
+  const bB = e.target.closest('.band'); if (bB) {
+    const b = bB.dataset.band, f = FAVS[day], i = f.indexOf(b);
+    i >= 0 ? f.splice(i, 1) : f.push(b); save(LS_FAV, FAVS); renderLineup();
+  }
+});
+$('#q').addEventListener('input', renderLineup);
+$('#parse').onclick = () => {
+  const { out, miss } = parseLines($('#paste').value);
+  const map = new Map((PASTED[day] || []).map(e => [norm(e.band), e]));
+  out.forEach(e => map.set(norm(e.band), e));
+  PASTED[day] = [...map.values()]; save(LS_TIMES, PASTED);
+  $('#parsed').innerHTML = `<p class="note">Added ${out.length} set${out.length === 1 ? '' : 's'}.${miss.length ? `<br>Couldn't match these lines to a ${dayObj().label} band:<br>` + miss.map(m => `<code>${esc(m)}</code>`).join('<br>') : ''}</p>`;
+  $('#paste').value = ''; renderTimes(); toast(`${out.length} sets added`);
+};
+$('#wipe').onclick = () => { PASTED[day] = []; save(LS_TIMES, PASTED); renderTimes(); toast('Cleared') };
+$('#clearfav').onclick = () => { FAVS[day] = []; save(LS_FAV, FAVS); renderLineup() };
+$('#share').onclick = async () => {
+  const idx = d => FAVS[d].map(b => LINEUP.days.find(x => x.id === d).bands.indexOf(b)).filter(i => i >= 0).join('.');
+  const url = `${location.origin}${location.pathname}#f=${idx('sat')}~${idx('sun')}`;
+  try { await navigator.clipboard.writeText(url); toast('Link copied') } catch { prompt('Copy this link:', url) }
+};
+
+/* ---------- boot ---------- */
+(async () => {
+  LINEUP = await fetch('data/lineup.json').then(r => r.json());
+  try { BASE = await fetch('data/schedule.json', { cache: 'no-store' }).then(r => r.json()) } catch {}
+  const stored = load(LS_FAV, null);
+  if (stored) FAVS = Object.assign({ sat: [], sun: [] }, stored);
+  else { try { FAVS = Object.assign({ sat: [], sun: [] }, await fetch('data/favorites.json', { cache: 'no-store' }).then(r => r.json())) } catch { FAVS = { sat: [], sun: [] } } }
+  PASTED = Object.assign({ sat: [], sun: [] }, load(LS_TIMES, {}));
+  const m = location.hash.match(/f=([\d.]*)~([\d.]*)/);
+  if (m) {
+    ['sat', 'sun'].forEach((d, k) => { const bands = LINEUP.days[k].bands; FAVS[d] = m[k + 1].split('.').filter(Boolean).map(i => bands[+i]).filter(Boolean) });
+    save(LS_FAV, FAVS); history.replaceState(null, '', location.pathname);
+  }
+  const todayId = LINEUP.days.find(d => d.date === new Date().toLocaleDateString('en-CA'))?.id;
+  day = todayId || load(LS_DAY, 'sat');
+  if (!FAVS.sat.length && !FAVS.sun.length) tab = 'lineup';
+  render();
+  setInterval(() => tab === 'mine' && renderMine(), 60000);
+})();
+</script>
+</body>
+</html>

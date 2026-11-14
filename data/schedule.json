@@ -1,0 +1,5 @@
+{
+  "_format": "Each entry: { band, stage, start, end } with 24-hour HH:MM times. Band names should match data/lineup.json.",
+  "sat": [],
+  "sun": []
+}

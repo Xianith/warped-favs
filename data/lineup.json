@@ -1,0 +1,50 @@
+{
+  "event": "Vans Warped Tour Orlando 2026",
+  "venue": "Camping World Stadium Campus",
+  "days": [
+    {
+      "id": "sat",
+      "label": "Saturday, Nov 14",
+      "date": "2026-11-14",
+      "hours": "12:00 PM – 11:00 PM",
+      "bands": [
+        "311", "Alexisonfire", "Allison", "Anthony Green & The Boom Done Band", "Arm's Length",
+        "Atmosphere", "Bad Cop Bad Cop", "Between the Buried and Me", "Boston Manor", "Bowling for Soup",
+        "Brayton", "Breathe Carolina", "Broadside", "Bryce Vine", "carolesdaughter",
+        "Codefendants", "División Minúscula", "Drain", "Dropkick Murphys", "Emmure",
+        "Family Force 5", "Fieldhockey", "Fireworks", "Firsun", "Girlfriends",
+        "Good Terms", "grandson", "Gym Class Heroes", "Hawthorne Heights", "Holy Wars",
+        "Honey Revenge", "Hoobastank", "I Set My Friends on Fire", "Initiate", "Joey Valence & Brae",
+        "John Harvie", "Losers Club", "Marianas Trench", "Maybsomeday", "Maylene and the Sons of Disaster",
+        "Norma Jean", "Origami Angel", "Oxymorrons", "People R Ugly", "Rain City Drive",
+        "Raue", "Rosecoloredworld", "Saint Blonde", "Save Ferris", "Senses",
+        "Silly Goose", "Silverstein", "Simple Plan", "Sleeping With Sirens", "South Arcade",
+        "Sublime", "Suicide Silence", "Sunami", "The Academy Is...", "The Home Team",
+        "The Summer Set", "The Wrecks", "Third Eye Blind", "Thousand Below", "Tillie",
+        "Trxvis", "Wesghost", "Winona Fighter", "Yelawolf"
+      ]
+    },
+    {
+      "id": "sun",
+      "label": "Sunday, Nov 15",
+      "date": "2026-11-15",
+      "hours": "11:00 AM – 10:00 PM",
+      "bands": [
+        "All That Remains", "Bayside", "Beauty School Dropout", "Ben Quad", "Big Ass Truck L.E.",
+        "Capstan", "Chlorine", "Citizen", "Counterparts", "Daisy Grenade",
+        "Dance Gavin Dance", "Deathbyromy", "Dirty Heads", "Doobie", "Drop Dead, Gorgeous",
+        "Elijah", "Emery", "Fit For A King", "Fox Lake", "Free Throw",
+        "From First to Last", "Games We Play", "Gang!", "Gideon", "Glassjaw",
+        "Holywatr", "Hot Chelle Rae", "Hot Milk", "Hot Mulligan", "Iann Dior",
+        "Insane Clown Posse", "Jimmy Eat World", "Joyce Manor", "Just Surrender", "Jutes",
+        "Kennyhoopla", "Lakeview", "Madball", "Makari", "Millington",
+        "Motion City Soundtrack", "MxPx", "New Found Glory", "Niis", "Pain of Truth",
+        "Phantom Planet", "Reel Big Fish", "Sace6", "Scary Kids Scaring Kids", "Set It Off",
+        "Set Your Goals", "Sitting on Saturn", "Stand Atlantic", "Super Sometimes", "Taking Back Sunday",
+        "Teen Mortgage", "The Cab", "The Early November", "The Paradox", "The Starting Line",
+        "The Used", "Thrice", "Upon a Burning Body", "Vana", "Vienna Vienna",
+        "Wolves of Glendale"
+      ]
+    }
+  ]
+}
