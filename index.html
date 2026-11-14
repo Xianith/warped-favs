@@ -90,6 +90,13 @@
   .ctx button{white-space:nowrap;display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);font-size:15px;padding:10px;border-radius:8px;cursor:pointer}
   .ctx button:hover,.ctx button:active{background:#fff1}
   .hint{font-size:12px;color:var(--dim);margin:-4px 0 10px}
+  .thumbs{display:flex;gap:6px;overflow-x:auto;margin-top:10px}
+  .thumbs img{height:110px;border-radius:8px;border:1px solid var(--line)}
+  .fl{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+  .fl label{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-weight:650}
+  .fl label small{color:var(--dim);font-weight:500;margin-left:auto}
+  .fl input{width:18px;height:18px;accent-color:var(--yellow)}
+  .rv select{background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 4px;font-size:15px}
   .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--yellow);color:#2a1a00;font-weight:800;padding:10px 16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:1}
 </style>
@@ -139,6 +146,20 @@
 
   <!-- SET TIMES -->
   <section id="tab-times" class="hidden">
+    <div class="photo" id="appbox">
+      <h2 style="margin-top:4px">📱 From the Warped app</h2>
+      <p class="note">Screenshot the official app and add the screenshots here. You can add as many as you like, from either day:</p>
+      <p class="note">• <b>My Likes</b> list → stars those bands here<br>• <b>Schedule / lineup screens with times</b> → adds set times (with real end times)</p>
+      <label class="btn" style="display:inline-block">Choose screenshots<input type="file" id="appshots" accept="image/*" multiple hidden></label>
+      <div id="appthumbs" class="thumbs"></div>
+      <div class="bar" style="margin-top:10px">
+        <button class="btn" id="appClaude" disabled>Read with Claude</button>
+        <button class="btn ghost" id="appOCR" disabled>Read on device</button>
+      </div>
+      <p class="note" style="margin:0">Uses the same Claude key as the board reader below. App screenshots are clean text, so reading on device works well here too.</p>
+      <div id="appstatus" class="note"></div>
+      <div id="appreview"></div>
+    </div>
     <div class="photo">
       <h2 style="margin-top:4px">📷 From a photo of the board</h2>
       <p class="note">Take or pick a photo of the set-time board for <b id="photoday"></b>. You'll review everything before it's saved.</p>
@@ -647,6 +668,185 @@ $('#review').addEventListener('click', e => {
 syncKeyUI();
 const _renderTimes = renderTimes;
 renderTimes = function () { $('#photoday').textContent = dayObj().label; _renderTimes() };
+</script>
+<script>
+/* ===================== Warped app screenshot importer =====================
+   The app (Insomniac) has no public API, so we read screenshots of it:
+   My Likes -> favorites; schedule screens -> set times with real end times. */
+let APPIMGS = [], APPREV = null;
+const dayOfBand = name => {
+  let best = [0, null, null];
+  for (const d of LINEUP.days) { const [b, sc] = bestMatch(name, d.bands); if (sc > best[0]) best = [sc, b, d.id] }
+  return { score: best[0], band: best[1], day: best[2] };
+};
+// OCR lines often start with junk from artist photos ("of( THE ACADEMY IS..."): try dropping leading words
+function lineBand(ln) {
+  const w = ln.replace(/[^A-Za-z0-9!&'.,\- ]/g, ' ').split(/\s+/).filter(Boolean);
+  let best = null;
+  for (let k = 0; k < Math.min(3, w.length); k++) {
+    const cand = w.slice(k).join(' ');
+    if (normB(cand).length < 3) break;
+    const m = dayOfBand(cand); if (!best || m.score > best.score) best = m;
+  }
+  return best;
+}
+function astatus(h) { $('#appstatus').innerHTML = h }
+
+$('#appshots').onchange = async e => {
+  const files = [...e.target.files]; if (!files.length) return;
+  APPIMGS = await Promise.all(files.map(loadImage));
+  $('#appthumbs').innerHTML = APPIMGS.map(i => `<img src="${i.src}" alt="">`).join('');
+  $('#appClaude').disabled = $('#appOCR').disabled = false; APPREV = null; $('#appreview').innerHTML = '';
+  astatus(`${files.length} screenshot${files.length > 1 ? 's' : ''} ready.`);
+};
+
+async function appClaude() {
+  const key = localStorage.getItem(LS_KEY);
+  if (!key) { $('#keybox').open = true; $('#keybox').scrollIntoView({ behavior: 'smooth' }); astatus('Add your Claude API key under Claude settings below first.'); return }
+  const model = localStorage.getItem(LS_MODEL) || 'claude-sonnet-5-5';
+  const imgs = APPIMGS.slice(0, 20).map(i => crop(i, 0, 1, 1568));
+  const prompt = `These are screenshots of the official Vans Warped Tour app for Warped Orlando 2026 (Sat Nov 14 and Sun Nov 15).
+Some may be a "My Likes"/favorites list; some may be lineup or schedule screens showing set times and stages.
+Saturday lineup: ${LINEUP.days[0].bands.join('; ')}
+Sunday lineup: ${LINEUP.days[1].bands.join('; ')}
+Return ONLY JSON:
+{"favorites":["<band names from any likes/favorites list>"],
+ "sets":[{"band":"","stage":"<or null>","day":"sat|sun|null","start":"H:MM AM/PM","end":"H:MM AM/PM or null"}],
+ "unsure":["<anything you couldn't read confidently>"]}
+Only put a band in favorites if it appears in a likes/favorites list. Only add sets that show a time. Use the day shown on screen if there is one, else null. Don't invent anything; skip cut-off rows.`;
+  astatus('<span class="spin"></span>Claude is reading the screenshots…');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model, max_tokens: 8000, messages: [{ role: 'user', content: [
+      ...imgs.map(c => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64(c) } })),
+      { type: 'text', text: prompt }] }] })
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || `API error ${r.status}`);
+  const text = j.content.filter(c => c.type === 'text').map(c => c.text).join('');
+  return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+}
+
+async function appOCR() {
+  astatus('<span class="spin"></span>Loading on-device reader…');
+  await loadTesseract();
+  const res = { favorites: [], sets: [], unsure: [] };
+  const rangeRe = /(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?\s*[-–—to]+\s*(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?/i;
+  const oneRe = /(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?/i;
+  for (let k = 0; k < APPIMGS.length; k++) {
+    astatus(`<span class="spin"></span>Reading screenshot ${k + 1} of ${APPIMGS.length}…`);
+    const { data } = await Tesseract.recognize(crop(APPIMGS[k], 0, 1, 2000), 'eng');
+    const lines = data.text.split('\n').map(l => l.trim()).filter(Boolean);
+    const isLikes = /my\s*likes|favou?rites/i.test(data.text) && !rangeRe.test(data.text);
+    lines.forEach((ln, i) => {
+      const m = lineBand(ln);
+      if (!m || m.score < .86) return;
+      if (isLikes) { res.favorites.push(m.band); return }
+      const near = [ln, lines[i + 1] || '', lines[i + 2] || ''].join(' ');
+      const rr = near.match(rangeRe), r1 = rr ? null : near.match(oneRe);
+      if (!rr && !r1) return;
+      const stageLn = [lines[i + 1], lines[i + 2]].find(l => l && /stage|foot|tent/i.test(l));
+      res.sets.push({ band: m.band, day: m.day, stage: stageLn ? stageLn.replace(rangeRe, '').replace(/[|•·]/g, '').trim() : null,
+        start: rr ? rr[1] + (rr[2] || rr[4] || '') : r1[1] + (r1[2] || ''), end: rr ? rr[3] + (rr[4] || '') : null });
+    });
+  }
+  res.unsure.push('On-device reading: check the list before saving.');
+  return res;
+}
+
+function buildAppReview(raw) {
+  const favs = [], seenF = new Set(), notes = [...(raw.unsure || [])];
+  for (const f of raw.favorites || []) {
+    const m = dayOfBand(f);
+    if (m.score < .72) { notes.push(`Couldn't match liked band “${f}” to the lineup`); continue }
+    if (seenF.has(m.band)) continue; seenF.add(m.band);
+    favs.push({ band: m.band, day: m.day, already: FAVS[m.day].includes(m.band), on: true, loose: m.score < .92 ? f : null });
+  }
+  const sets = [];
+  for (const s of raw.sets || []) {
+    const m = dayOfBand(s.band || '');
+    const d = (s.day === 'sat' || s.day === 'sun') ? s.day : (m.score >= .72 ? m.day : day);
+    const band = m.score >= .72 ? m.band : String(s.band || '').trim();
+    let st, en = null;
+    try { st = parseBoardTime(s.start) } catch { notes.push(`Unreadable time for ${band}: “${s.start}”`); continue }
+    if (s.end) { try { en = parseBoardTime(s.end, st) } catch {} }
+    if (en != null && en <= st) en = null;
+    sets.push({ band, day: d, stage: s.stage || '', start: hhmm(st), end: en != null ? hhmm(en) : '', flag: m.score >= .92 ? '' : m.score >= .72 ? 'warn' : 'bad' });
+  }
+  sets.sort((a, b) => (a.day === b.day ? 0 : a.day === 'sat' ? -1 : 1) || toMin(a.start) - toMin(b.start));
+  return { favs, sets, notes };
+}
+
+function renderAppReview() {
+  if (!APPREV) { $('#appreview').innerHTML = ''; return }
+  const { favs, sets, notes } = APPREV, dl = id => LINEUP.days.find(d => d.id === id).label.split(',')[0];
+  $('#appreview').innerHTML = `
+    <div class="rep">${notes.map(n => `<div class="y">? ${esc(n)}</div>`).join('')}</div>
+    ${favs.length ? `<h2>Likes found (${favs.length})</h2>
+      <p class="note" style="margin:0">Checked bands get starred. Nothing gets unstarred.</p>
+      <div class="fl">${favs.map((f, i) => `<label><input type="checkbox" data-fav="${i}" ${f.on ? 'checked' : ''}>${esc(f.band)}${f.loose ? ` <span class="note">(read as “${esc(f.loose)}”)</span>` : ''}<small>${dl(f.day)}${f.already ? ' · already ★' : ' · new'}</small></label>`).join('')}</div>` : ''}
+    ${sets.length ? `<h2>Set times found (${sets.length})</h2>
+      <datalist id="dl-all">${LINEUP.days.flatMap(d => d.bands).map(b => `<option value="${esc(b)}">`).join('')}</datalist>
+      <div class="rv">${sets.map((s, i) => `
+        <div class="row ${s.flag}" data-ai="${i}" style="grid-template-columns:118px 1fr 28px;grid-template-areas:'band band x' 'time stage x' 'day end x'">
+          <input class="bd" style="grid-area:band" data-k="band" list="dl-all" value="${esc(s.band)}" aria-label="Band">
+          <input style="grid-area:time" type="time" data-k="start" value="${s.start}" aria-label="Start">
+          <input style="grid-area:stage" data-k="stage" value="${esc(s.stage)}" placeholder="Stage" aria-label="Stage">
+          <select style="grid-area:day" data-k="day">${LINEUP.days.map(d => `<option value="${d.id}" ${d.id === s.day ? 'selected' : ''}>${dl(d.id)}</option>`).join('')}</select>
+          <input style="grid-area:end" type="time" data-k="end" value="${s.end}" aria-label="End (blank = estimate)">
+          <button class="x" style="grid-area:x" data-adel="${i}" aria-label="Remove">×</button>
+        </div>`).join('')}</div>
+      <p class="note">Second row: day and end time. A blank end time gets estimated.</p>` : ''}
+    ${!favs.length && !sets.length ? '<div class="empty">Nothing usable found in those screenshots.</div>' : `
+    <div class="bar" style="margin-top:10px"><button class="btn" id="appSave">Save</button><button class="btn ghost" id="appCancel">Discard</button></div>`}`;
+}
+
+async function runApp(fn) {
+  $('#appClaude').disabled = $('#appOCR').disabled = true;
+  try { const raw = await fn(); if (!raw) return; APPREV = buildAppReview(raw); astatus(''); renderAppReview() }
+  catch (err) { astatus("Couldn't read them: " + esc(err.message || err)) }
+  finally { $('#appClaude').disabled = $('#appOCR').disabled = !APPIMGS.length }
+}
+$('#appClaude').onclick = () => runApp(appClaude);
+$('#appOCR').onclick = () => runApp(appOCR);
+
+$('#appreview').addEventListener('change', e => { if (e.target.dataset.fav != null) APPREV.favs[+e.target.dataset.fav].on = e.target.checked });
+$('#appreview').addEventListener('input', e => {
+  const row = e.target.closest('[data-ai]'), k = e.target.dataset.k; if (!row || !k) return;
+  APPREV.sets[+row.dataset.ai][k] = e.target.value;
+});
+$('#appreview').addEventListener('click', e => {
+  if (e.target.dataset.adel != null) { APPREV.sets.splice(+e.target.dataset.adel, 1); renderAppReview(); return }
+  if (e.target.id === 'appCancel') { APPREV = null; renderAppReview(); return }
+  if (e.target.id !== 'appSave') return;
+  let nf = 0;
+  for (const f of APPREV.favs) if (f.on && !FAVS[f.day].includes(f.band)) { FAVS[f.day].push(f.band); nf++ }
+  save(LS_FAV, FAVS);
+  const counts = { sat: 0, sun: 0 };
+  for (const d of ['sat', 'sun']) {
+    const mine = APPREV.sets.filter(s => s.day === d && s.band.trim() && s.start);
+    if (!mine.length) continue;
+    // estimate missing ends per stage, same rule as the board reader
+    const byStage = {}; mine.forEach(s => (byStage[s.stage] ||= []).push(s));
+    const out = [];
+    for (const rows of Object.values(byStage)) {
+      rows.sort((a, b) => toMin(a.start) - toMin(b.start));
+      rows.forEach((r, i) => {
+        const st = toMin(r.start);
+        if (r.end && toMin(r.end) > st) { out.push({ band: r.band.trim(), stage: r.stage.trim(), start: r.start, end: r.end }); return }
+        const nxt = rows[i + 1] && toMin(rows[i + 1].start);
+        const len = nxt == null ? LAST_SET : Math.min(DEFAULT_SET, Math.max(MIN_SET, nxt - st - CHANGEOVER));
+        out.push({ band: r.band.trim(), stage: r.stage.trim(), start: r.start, end: hhmm(Math.min(st + len, 1439)), endEstimated: true });
+      });
+    }
+    const map = new Map((PASTED[d] || []).map(e => [norm(e.band), e]));
+    out.forEach(e => map.set(norm(e.band), e)); PASTED[d] = [...map.values()]; counts[d] = out.length;
+  }
+  save(LS_TIMES, PASTED);
+  APPREV = null; renderAppReview(); render();
+  toast(`${nf} new star${nf === 1 ? '' : 's'} · ${counts.sat + counts.sun} set${counts.sat + counts.sun === 1 ? '' : 's'} saved`);
+});
 </script>
 </body>
 </html>
