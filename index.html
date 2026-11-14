@@ -90,6 +90,7 @@
   .ctx button{white-space:nowrap;display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);font-size:15px;padding:10px;border-radius:8px;cursor:pointer}
   .ctx button:hover,.ctx button:active{background:#fff1}
   .hint{font-size:12px;color:var(--dim);margin:-4px 0 10px}
+  .raw{white-space:pre-wrap;font-size:12px;background:#0005;border-radius:8px;padding:8px;max-height:260px;overflow:auto;color:var(--dim)}
   .thumbs{display:flex;gap:6px;overflow-x:auto;margin-top:10px}
   .thumbs img{height:110px;border-radius:8px;border:1px solid var(--line)}
   .fl{display:flex;flex-direction:column;gap:4px;margin-top:6px}
@@ -157,6 +158,12 @@
         <button class="btn ghost" id="appOCR" disabled>Read on device</button>
       </div>
       <p class="note" style="margin:0">Uses the same Claude key as the board reader below. App screenshots are clean text, so reading on device works well here too.</p>
+      <details id="livetext" style="margin-top:10px">
+        <summary class="note"><b>Free, no key:</b> paste text copied from a screenshot (iPhone Live Text)</summary>
+        <p class="note">In Photos, open the screenshot → tap the <b>Live Text</b> icon (bottom-right) → <b>Select All</b> → <b>Copy</b>. Paste below; you can paste several screens one after another.</p>
+        <textarea id="apptext" style="min-height:140px" placeholder="Paste text from the Warped app…"></textarea>
+        <div class="bar" style="margin-top:8px"><button class="btn" id="appTextRead">Read pasted text</button></div>
+      </details>
       <div id="appstatus" class="note"></div>
       <div id="appreview"></div>
     </div>
@@ -526,7 +533,7 @@ Keep stages in left-to-right order and sets top-to-bottom. Skip empty cells.`;
       { type: 'text', text: prompt }] }] })
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(j?.error?.message || `API error ${r.status}`);
+  if (!r.ok) throw new Error(/credit balance/i.test(j?.error?.message || '') ? 'Your Anthropic API account has no credits (API usage is billed separately from a Claude subscription). Add credits at console.anthropic.com → Billing, or use Read on device / the Live Text paste, which are free.' : (j?.error?.message || `API error ${r.status}`));
   const text = j.content.filter(c => c.type === 'text').map(c => c.text).join('');
   const board = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
   return { board, unsure: board.unsure || [] };
@@ -696,7 +703,7 @@ $('#appshots').onchange = async e => {
   const files = [...e.target.files]; if (!files.length) return;
   APPIMGS = await Promise.all(files.map(loadImage));
   $('#appthumbs').innerHTML = APPIMGS.map(i => `<img src="${i.src}" alt="">`).join('');
-  $('#appClaude').disabled = $('#appOCR').disabled = false; APPREV = null; $('#appreview').innerHTML = '';
+  $('#appClaude').disabled = $('#appOCR').disabled = false; APPREV = null; $('#livetext').open = false; $('#appreview').innerHTML = '';
   astatus(`${files.length} screenshot${files.length > 1 ? 's' : ''} ready.`);
 };
 
@@ -723,45 +730,61 @@ Only put a band in favorites if it appears in a likes/favorites list. Only add s
       { type: 'text', text: prompt }] }] })
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(j?.error?.message || `API error ${r.status}`);
+  if (!r.ok) throw new Error(/credit balance/i.test(j?.error?.message || '') ? 'Your Anthropic API account has no credits (API usage is billed separately from a Claude subscription). Add credits at console.anthropic.com → Billing, or use Read on device / the Live Text paste, which are free.' : (j?.error?.message || `API error ${r.status}`));
   const text = j.content.filter(c => c.type === 'text').map(c => c.text).join('');
   return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
 }
 
+const APP_RANGE = /(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?\s*[-–—to]+\s*(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?/i;
+const APP_ONE = /(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?/i;
+// Turn text from one app screen (OCR'd or copied with Live Text) into likes + sets.
+function parseAppText(text) {
+  const out = { favorites: [], sets: [] };
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const labeledLikes = /my\s*likes|favou?rites/i.test(text);   // times win: the app's My Schedule tab sits under the MY FAVORITES header
+  const bandLines = [];
+  lines.forEach((ln, i) => {
+    if (i === 0 && /^\d{1,2}:\d{2}\b/.test(ln) && ln.length < 25) return;   // phone status bar
+    const m = lineBand(ln); if (m && m.score >= .86) bandLines.push([i, m]);
+  });
+  const hasTimes = lines.some((l, i) => i > 0 && APP_ONE.test(l) && !/^\d{1,2}:\d{2}\s*$/.test(l) || APP_RANGE.test(l));
+  if (!hasTimes) {
+    // likes list, or a screen of band names with no times: offer as likes (pre-checked only if it's the Likes screen)
+    bandLines.forEach(([, m]) => out.favorites.push({ name: m.band, on: labeledLikes }));
+    return out;
+  }
+  bandLines.forEach(([i, m], n) => {
+    const stop = bandLines[n + 1]?.[0] ?? lines.length;          // don't read into the next band's rows
+    const near = lines.slice(i, Math.min(stop, i + 4)).join(' ');
+    const rr = near.match(APP_RANGE), r1 = rr ? null : near.match(APP_ONE);
+    if (!rr && !r1) return;
+    const stageLn = lines.slice(i + 1, Math.min(stop, i + 4)).find(l => /stage|foot|tent|geico|ghost|trojan|mixers/i.test(l));
+    out.sets.push({ band: m.band, day: m.day, stage: stageLn ? stageLn.replace(APP_RANGE, '').replace(APP_ONE, '').replace(/[|•·]/g, '').trim() : null,
+      start: rr ? rr[1] + (rr[2] || rr[4] || '') : r1[1] + (r1[2] || ''), end: rr ? rr[3] + (rr[4] || '') : null });
+  });
+  return out;
+}
 async function appOCR() {
   astatus('<span class="spin"></span>Loading on-device reader…');
   await loadTesseract();
-  const res = { favorites: [], sets: [], unsure: [] };
-  const rangeRe = /(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?\s*[-–—to]+\s*(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?/i;
-  const oneRe = /(\d{1,2}[:.]\d{2})\s*([ap]\.?m\.?)?/i;
+  const res = { favorites: [], sets: [], unsure: ['On-device reading: check the list before saving.'], rawText: [] };
   for (let k = 0; k < APPIMGS.length; k++) {
     astatus(`<span class="spin"></span>Reading screenshot ${k + 1} of ${APPIMGS.length}…`);
     const { data } = await Tesseract.recognize(crop(APPIMGS[k], 0, 1, 2000), 'eng');
-    const lines = data.text.split('\n').map(l => l.trim()).filter(Boolean);
-    const isLikes = /my\s*likes|favou?rites/i.test(data.text) && !rangeRe.test(data.text);
-    lines.forEach((ln, i) => {
-      const m = lineBand(ln);
-      if (!m || m.score < .86) return;
-      if (isLikes) { res.favorites.push(m.band); return }
-      const near = [ln, lines[i + 1] || '', lines[i + 2] || ''].join(' ');
-      const rr = near.match(rangeRe), r1 = rr ? null : near.match(oneRe);
-      if (!rr && !r1) return;
-      const stageLn = [lines[i + 1], lines[i + 2]].find(l => l && /stage|foot|tent/i.test(l));
-      res.sets.push({ band: m.band, day: m.day, stage: stageLn ? stageLn.replace(rangeRe, '').replace(/[|•·]/g, '').trim() : null,
-        start: rr ? rr[1] + (rr[2] || rr[4] || '') : r1[1] + (r1[2] || ''), end: rr ? rr[3] + (rr[4] || '') : null });
-    });
+    res.rawText.push(data.text);
+    const r = parseAppText(data.text); res.favorites.push(...r.favorites); res.sets.push(...r.sets);
   }
-  res.unsure.push('On-device reading: check the list before saving.');
   return res;
 }
 
 function buildAppReview(raw) {
   const favs = [], seenF = new Set(), notes = [...(raw.unsure || [])];
-  for (const f of raw.favorites || []) {
+  for (const f0 of raw.favorites || []) {
+    const f = typeof f0 === 'string' ? f0 : f0.name, on = typeof f0 === 'string' ? true : f0.on;
     const m = dayOfBand(f);
     if (m.score < .72) { notes.push(`Couldn't match liked band “${f}” to the lineup`); continue }
-    if (seenF.has(m.band)) continue; seenF.add(m.band);
-    favs.push({ band: m.band, day: m.day, already: FAVS[m.day].includes(m.band), on: true, loose: m.score < .92 ? f : null });
+    if (seenF.has(m.band)) { if (on) favs.find(x => x.band === m.band).on = true; continue } seenF.add(m.band);
+    favs.push({ band: m.band, day: m.day, already: FAVS[m.day].includes(m.band), on, loose: m.score < .92 ? f : null });
   }
   const sets = [];
   for (const s of raw.sets || []) {
@@ -775,7 +798,8 @@ function buildAppReview(raw) {
     sets.push({ band, day: d, stage: s.stage || '', start: hhmm(st), end: en != null ? hhmm(en) : '', flag: m.score >= .92 ? '' : m.score >= .72 ? 'warn' : 'bad' });
   }
   sets.sort((a, b) => (a.day === b.day ? 0 : a.day === 'sat' ? -1 : 1) || toMin(a.start) - toMin(b.start));
-  return { favs, sets, notes };
+  if (favs.length && !favs.some(f => f.on)) notes.push("These didn't look like your My Likes screen, so nothing is pre-checked. Tick the ones you want starred.");
+  return { favs, sets, notes, rawText: raw.rawText || [] };
 }
 
 function renderAppReview() {
@@ -798,7 +822,8 @@ function renderAppReview() {
           <button class="x" style="grid-area:x" data-adel="${i}" aria-label="Remove">×</button>
         </div>`).join('')}</div>
       <p class="note">Second row: day and end time. A blank end time gets estimated.</p>` : ''}
-    ${!favs.length && !sets.length ? '<div class="empty">Nothing usable found in those screenshots.</div>' : `
+    ${APPREV.rawText.length ? `<details style="margin-top:8px"><summary class="note">What the reader saw</summary><pre class="raw">${esc(APPREV.rawText.map((t, i) => `— screenshot ${i + 1} —\n${t}`).join('\n'))}</pre></details>` : ''}
+    ${!favs.length && !sets.length ? '<div class="empty">Nothing usable found. Open “What the reader saw” above, or try the Live Text paste below.</div>' : `
     <div class="bar" style="margin-top:10px"><button class="btn" id="appSave">Save</button><button class="btn ghost" id="appCancel">Discard</button></div>`}`;
 }
 
@@ -809,6 +834,14 @@ async function runApp(fn) {
   finally { $('#appClaude').disabled = $('#appOCR').disabled = !APPIMGS.length }
 }
 $('#appClaude').onclick = () => runApp(appClaude);
+$('#appTextRead').onclick = async () => {
+  const t = $('#apptext').value.trim(); if (!t) { astatus('Paste some text first.'); return }
+  // split pasted screens on repeated headers so each screen is judged on its own
+  const chunks = t.split(/\n(?=\s*(?:\d{1,2}:\d{2}\b.{0,20}\n)?\s*my\s*favou?rites)/i);
+  const res = { favorites: [], sets: [], unsure: [], rawText: [] };
+  chunks.forEach(c => { const r = parseAppText(c); res.favorites.push(...r.favorites); res.sets.push(...r.sets) });
+  APPREV = buildAppReview(res); APPREV.rawText = [t]; astatus(''); renderAppReview();
+};
 $('#appOCR').onclick = () => runApp(appOCR);
 
 $('#appreview').addEventListener('change', e => { if (e.target.dataset.fav != null) APPREV.favs[+e.target.dataset.fav].on = e.target.checked });
